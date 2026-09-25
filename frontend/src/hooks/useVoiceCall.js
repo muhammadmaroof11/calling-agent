@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { speakWithBrowserTts, stopBrowserTts } from '../utils/browserTts';
 
 export function useVoiceCall() {
   const [callState, setCallState] = useState('idle'); // 'idle' | 'connected' | 'ended'
@@ -52,9 +53,28 @@ export function useVoiceCall() {
     };
   }, [callState]);
 
-  // Play audio helper
-  const playAgentAudio = useCallback((audioUrl) => {
-    if (!audioUrl) return;
+  // Play audio helper with User Browser TTS fallback
+  const playAgentAudio = useCallback((audioUrl, fallbackText = null) => {
+    stopBrowserTts();
+    if (!audioUrl) {
+      if (fallbackText) {
+        setAgentStatus('speaking');
+        speakWithBrowserTts(
+          fallbackText,
+          () => setAgentStatus('speaking'),
+          () => {
+            setAgentStatus('idle');
+            if (continuousModeRef.current && callState === 'connected') {
+              setTimeout(() => startRecording(), 500);
+            }
+          }
+        );
+      } else {
+        setAgentStatus('idle');
+      }
+      return;
+    }
+
     if (audioPlayerRef.current) {
       audioPlayerRef.current.pause();
     }
@@ -64,7 +84,6 @@ export function useVoiceCall() {
 
     audio.onended = () => {
       setAgentStatus('idle');
-      // If continuous mode is enabled and call is still active, automatically start listening
       if (continuousModeRef.current && callState === 'connected') {
         setTimeout(() => {
           startRecording();
@@ -73,13 +92,39 @@ export function useVoiceCall() {
     };
 
     audio.onerror = (e) => {
-      console.error('Audio playback error:', e);
-      setAgentStatus('idle');
+      console.warn('Server audio playback error, seamlessly using User Browser TTS fallback:', e);
+      if (fallbackText) {
+        speakWithBrowserTts(
+          fallbackText,
+          () => setAgentStatus('speaking'),
+          () => {
+            setAgentStatus('idle');
+            if (continuousModeRef.current && callState === 'connected') {
+              setTimeout(() => startRecording(), 500);
+            }
+          }
+        );
+      } else {
+        setAgentStatus('idle');
+      }
     };
 
     audio.play().catch((err) => {
-      console.warn('Auto-play blocked or failed:', err);
-      setAgentStatus('idle');
+      console.warn('Audio play prevented by browser, seamlessly using User Browser TTS fallback:', err);
+      if (fallbackText) {
+        speakWithBrowserTts(
+          fallbackText,
+          () => setAgentStatus('speaking'),
+          () => {
+            setAgentStatus('idle');
+            if (continuousModeRef.current && callState === 'connected') {
+              setTimeout(() => startRecording(), 500);
+            }
+          }
+        );
+      } else {
+        setAgentStatus('idle');
+      }
     });
   }, [callState]);
 
@@ -122,7 +167,7 @@ export function useVoiceCall() {
         },
       ]);
       setLastMetrics(data.metrics);
-      playAgentAudio(data.audio_url);
+      playAgentAudio(data.audio_url, data.agent_reply);
     } catch (err) {
       console.error('Greeting error:', err);
       setAgentStatus('idle');
@@ -133,6 +178,7 @@ export function useVoiceCall() {
   // End Call
   const endCall = () => {
     stopRecording();
+    stopBrowserTts();
     if (audioPlayerRef.current) {
       audioPlayerRef.current.pause();
     }
@@ -237,7 +283,7 @@ export function useVoiceCall() {
       ]);
 
       setLastMetrics(data.metrics);
-      playAgentAudio(data.audio_url);
+      playAgentAudio(data.audio_url, data.agent_reply);
     } catch (err) {
       console.error('Voice turn error:', err);
       setErrorMessage(`Voice processing error: ${err.message}`);
@@ -293,7 +339,7 @@ export function useVoiceCall() {
       ]);
 
       setLastMetrics(data.metrics);
-      playAgentAudio(data.audio_url);
+      playAgentAudio(data.audio_url, data.agent_reply);
     } catch (err) {
       console.error('Text turn error:', err);
       setErrorMessage(`Turn error: ${err.message}`);

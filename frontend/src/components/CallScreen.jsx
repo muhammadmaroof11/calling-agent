@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Phone,
   PhoneOff,
@@ -8,9 +8,12 @@ import {
   Send,
   Radio,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Volume2,
+  Zap,
+  Repeat
 } from 'lucide-react';
-import AudioVisualizer from './AudioVisualizer';
+import VoiceOrb from './VoiceOrb';
 
 export default function CallScreen({
   callState,
@@ -19,6 +22,7 @@ export default function CallScreen({
   isRecording,
   continuousMode,
   errorMessage,
+  systemStatus,
   onStartCall,
   onEndCall,
   onStartRecording,
@@ -27,6 +31,35 @@ export default function CallScreen({
   onToggleContinuous,
 }) {
   const [textInput, setTextInput] = useState('');
+
+  // Keyboard shortcut: Spacebar to toggle speak during connected call
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Don't trigger if user is typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.code === 'Space' && callState === 'connected') {
+        e.preventDefault();
+        if (!isRecording && agentStatus !== 'transcribing' && agentStatus !== 'thinking') {
+          onStartRecording();
+        }
+      }
+    };
+
+    const handleKeyUp = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.code === 'Space' && callState === 'connected' && isRecording) {
+        e.preventDefault();
+        onStopRecording();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [callState, isRecording, agentStatus, onStartRecording, onStopRecording]);
 
   const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -43,221 +76,186 @@ export default function CallScreen({
   };
 
   const getStatusDisplay = () => {
-    if (callState === 'idle') return { label: 'Ready to Call', color: 'text-slate-400' };
-    if (callState === 'ended') return { label: 'Call Ended', color: 'text-rose-400' };
-    
+    if (callState === 'idle') {
+      return {
+        title: 'Ready to Connect',
+        desc: 'Start voice call with Voxora to experience the sub-second free AI voice loop.',
+        badge: 'Offline',
+        badgeColor: 'bg-slate-800 text-slate-400 border-slate-700',
+      };
+    }
+    if (callState === 'ended') {
+      return {
+        title: 'Call Disconnected',
+        desc: 'Session ended. Review transcript on the right or tap to reconnect.',
+        badge: 'Ended',
+        badgeColor: 'bg-rose-950/80 text-rose-300 border-rose-800',
+      };
+    }
+
     switch (agentStatus) {
       case 'listening':
-        return { label: 'Listening to you... (Click Mic to Send)', color: 'text-emerald-400' };
+        return {
+          title: 'Listening to Caller...',
+          desc: 'Speak naturally into your microphone. Tap again or release to send.',
+          badge: 'Mic Active',
+          badgeColor: 'bg-emerald-950/90 text-emerald-300 border-emerald-700 animate-pulse',
+        };
       case 'transcribing':
-        return { label: 'Transcribing Audio (Whisper STT)...', color: 'text-amber-400' };
+        return {
+          title: 'Groq Whisper Transcribing...',
+          desc: 'Converting audio waveform to text tokens in ~150ms.',
+          badge: 'STT Active',
+          badgeColor: 'bg-amber-950/90 text-amber-300 border-amber-700 animate-pulse',
+        };
       case 'thinking':
-        return { label: 'Agent Thinking (LLM Brain)...', color: 'text-blue-400' };
+        return {
+          title: 'Gemini 2.5 Flash Reasoning...',
+          desc: 'Generating conversational telephone response with session context.',
+          badge: 'Brain Active',
+          badgeColor: 'bg-blue-950/90 text-blue-300 border-blue-700 animate-pulse',
+        };
       case 'speaking':
-        return { label: 'Voxora Speaking (Neural TTS)...', color: 'text-fuchsia-400' };
+        return {
+          title: 'Voxora Speaking...',
+          desc: 'Synthesizing voice audio stream via Fish Audio & User Neural TTS.',
+          badge: 'TTS Active',
+          badgeColor: 'bg-violet-950/90 text-violet-300 border-violet-700 animate-pulse',
+        };
       default:
-        return { label: 'In Call • Tap Mic to Speak', color: 'text-teal-300' };
+        return {
+          title: 'Call Connected',
+          desc: 'Tap the mic or hold [Space] to speak with Voxora.',
+          badge: 'Connected',
+          badgeColor: 'bg-emerald-950 text-emerald-300 border-emerald-800',
+        };
     }
   };
 
-  const statusInfo = getStatusDisplay();
+  const status = getStatusDisplay();
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col items-center justify-between min-h-[480px] relative overflow-hidden">
-      {/* Background Ambient Glow */}
-      <div
-        className={`absolute -top-24 -left-24 w-72 h-72 rounded-full blur-3xl pointer-events-none transition-all duration-700 ${
-          agentStatus === 'listening'
-            ? 'bg-emerald-500/20'
-            : agentStatus === 'speaking'
-            ? 'bg-violet-600/20'
-            : agentStatus === 'thinking' || agentStatus === 'transcribing'
-            ? 'bg-amber-500/20'
-            : 'bg-indigo-600/10'
-        }`}
-      />
-
-      {/* Top Bar: Call Timer & Status */}
-      <div className="w-full flex items-center justify-between z-10">
-        <div className="flex items-center gap-2">
-          <span
-            className={`w-2.5 h-2.5 rounded-full ${
-              callState === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'
-            }`}
-          />
-          <span className="text-xs font-medium text-slate-300">
-            {callState === 'connected' ? 'Live Call' : 'Offline'}
+    <div className="glass-card rounded-3xl p-6 shadow-2xl flex flex-col justify-between min-h-[580px] relative overflow-hidden border border-white/10">
+      {/* Top Header Information */}
+      <div className="w-full flex items-center justify-between pb-4 border-b border-white/5 z-10">
+        <div className="flex items-center gap-2.5">
+          <span className={`px-2.5 py-1 rounded-full text-[11px] font-mono border ${status.badgeColor}`}>
+            {status.badge}
+          </span>
+          <span className="text-xs text-slate-400 font-medium hidden sm:inline">
+            {systemStatus?.llm_provider || 'Gemini 2.5 Flash'}
           </span>
         </div>
 
         {callState === 'connected' && (
-          <div className="flex items-center gap-1.5 font-mono text-xs text-slate-300 bg-slate-800/80 px-3 py-1 rounded-full border border-slate-700">
-            <Clock className="w-3.5 h-3.5 text-slate-400" />
+          <div className="flex items-center gap-2 bg-slate-900/80 border border-white/10 px-3 py-1 rounded-full text-xs font-mono text-slate-200">
+            <Clock className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
             <span>{formatDuration(callDuration)}</span>
           </div>
         )}
       </div>
 
-      {/* Error message notification if any */}
+      {/* Error alert if any */}
       {errorMessage && (
-        <div className="w-full mt-3 p-2.5 bg-rose-950/60 border border-rose-800/80 rounded-xl flex items-center gap-2 text-rose-300 text-xs z-10">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+        <div className="w-full my-2 p-3 bg-rose-950/60 border border-rose-800/80 rounded-2xl flex items-center gap-2.5 text-rose-300 text-xs z-10 shadow-lg">
+          <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
           <span className="flex-1">{errorMessage}</span>
         </div>
       )}
 
-      {/* Center Phone Call Avatar & Waveform */}
-      <div className="my-auto flex flex-col items-center z-10 py-6">
-        <div className="relative flex items-center justify-center">
-          {/* Animated concentric rings */}
-          {callState === 'connected' && (
-            <>
-              <div
-                className={`absolute w-44 h-44 rounded-full border border-current opacity-20 animate-ping pointer-events-none ${
-                  agentStatus === 'speaking'
-                    ? 'text-violet-500'
-                    : agentStatus === 'listening'
-                    ? 'text-emerald-500'
-                    : 'text-slate-600'
-                }`}
-                style={{ animationDuration: '3s' }}
-              />
-              <div
-                className={`absolute w-36 h-36 rounded-full border border-current opacity-30 pointer-events-none ${
-                  agentStatus === 'speaking'
-                    ? 'text-fuchsia-400 animate-pulse'
-                    : agentStatus === 'listening'
-                    ? 'text-teal-400 animate-pulse'
-                    : 'text-slate-700'
-                }`}
-              />
-            </>
-          )}
+      {/* Central Visualizer Section */}
+      <div className="my-auto flex flex-col items-center justify-center text-center z-10 py-4">
+        {/* Dynamic Voice Orb */}
+        <VoiceOrb status={agentStatus} callState={callState} />
 
-          {/* Central Sphere / Avatar */}
-          <div
-            className={`w-28 h-28 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 ${
-              callState === 'connected'
-                ? agentStatus === 'speaking'
-                  ? 'bg-gradient-to-tr from-violet-600 to-fuchsia-500 shadow-violet-500/40 scale-105'
-                  : agentStatus === 'listening'
-                  ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 shadow-emerald-500/40 scale-105'
-                  : agentStatus === 'thinking' || agentStatus === 'transcribing'
-                  ? 'bg-gradient-to-tr from-amber-500 to-orange-500 shadow-amber-500/40'
-                  : 'bg-gradient-to-tr from-indigo-700 to-blue-600 shadow-indigo-600/30'
-                : 'bg-slate-800 border-2 border-slate-700 text-slate-500'
-            }`}
-          >
-            {callState === 'connected' ? (
-              agentStatus === 'listening' ? (
-                <Mic className="w-10 h-10 text-white animate-bounce" />
-              ) : agentStatus === 'speaking' ? (
-                <Radio className="w-10 h-10 text-white animate-pulse" />
-              ) : (
-                <Sparkles className="w-10 h-10 text-white" />
-              )
-            ) : (
-              <Phone className="w-10 h-10 text-slate-400" />
-            )}
-          </div>
-        </div>
-
-        {/* Audio Waveform */}
-        <div className="w-full max-w-xs mt-4">
-          <AudioVisualizer status={agentStatus} />
-        </div>
-
-        {/* Status Text */}
-        <h4 className={`text-sm font-semibold tracking-wide mt-1 ${statusInfo.color} transition-colors`}>
-          {statusInfo.label}
-        </h4>
-        <p className="text-[11px] text-slate-500 mt-0.5">
-          {callState === 'connected' ? 'Voxora Voice Assistant' : 'Click "Start Call" to begin'}
+        {/* Dynamic Status Title & Subtitle */}
+        <h3 className="text-xl font-bold tracking-tight text-white mt-1">
+          {status.title}
+        </h3>
+        <p className="text-xs text-slate-400 max-w-sm mt-1 leading-relaxed">
+          {status.desc}
         </p>
       </div>
 
-      {/* Controls & Interaction */}
-      <div className="w-full flex flex-col gap-3 z-10">
+      {/* Action Controls & Dock */}
+      <div className="w-full flex flex-col gap-3.5 z-10 pt-2">
         {callState === 'connected' ? (
           <>
-            {/* Primary Action Buttons */}
-            <div className="flex items-center justify-center gap-4">
-              {/* Mic Toggle Button */}
+            {/* Primary Calling Dock */}
+            <div className="flex items-center justify-center gap-3">
+              {/* Main Mic Button */}
               <button
                 onClick={isRecording ? onStopRecording : onStartRecording}
                 disabled={agentStatus === 'transcribing' || agentStatus === 'thinking'}
-                className={`relative group px-5 py-3.5 rounded-full font-medium text-sm flex items-center gap-2 shadow-lg transition-all duration-200 active:scale-95 disabled:opacity-50 ${
+                className={`relative group px-6 py-4 rounded-2xl font-semibold text-xs sm:text-sm flex items-center gap-2.5 shadow-xl transition-all duration-200 active:scale-95 disabled:opacity-50 ${
                   isRecording
-                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/30 animate-pulse'
-                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-white shadow-emerald-500/30 scale-105'
+                    : 'bg-slate-800/90 hover:bg-slate-700/90 text-slate-100 border border-white/10 hover:border-emerald-500/50'
                 }`}
               >
-                {isRecording ? (
-                  <>
-                    <Mic className="w-4 h-4 text-white" />
-                    <span>Click to Send Voice</span>
-                  </>
-                ) : (
-                  <>
-                    <Mic className="w-4 h-4 text-emerald-400" />
-                    <span>Tap to Speak</span>
-                  </>
-                )}
+                <div className={`p-1.5 rounded-lg ${isRecording ? 'bg-white/20' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                  <Mic className="w-4 h-4" />
+                </div>
+                <span>{isRecording ? 'Listening... Tap to Send' : 'Tap to Speak'}</span>
+                <span className="hidden md:inline text-[10px] text-slate-400 font-mono bg-black/30 px-1.5 py-0.5 rounded ml-1">
+                  Hold [Space]
+                </span>
               </button>
 
               {/* End Call Button */}
               <button
                 onClick={onEndCall}
-                className="p-3.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/30 transition-transform active:scale-95"
-                title="End Call"
+                className="p-4 rounded-2xl bg-rose-600/90 hover:bg-rose-500 text-white shadow-xl shadow-rose-600/25 border border-rose-500/40 transition-transform active:scale-95"
+                title="Disconnect Call"
               >
                 <PhoneOff className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Hands-free mode toggle */}
+            {/* Hands-Free Mode Toggle */}
             <div className="flex items-center justify-center gap-2 text-xs text-slate-400">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
+              <label className="flex items-center gap-2 cursor-pointer select-none bg-slate-900/60 border border-white/5 hover:border-white/10 px-3 py-1.5 rounded-xl transition-colors">
                 <input
                   type="checkbox"
                   checked={continuousMode}
                   onChange={(e) => onToggleContinuous(e.target.checked)}
-                  className="rounded bg-slate-800 border-slate-700 text-emerald-500 focus:ring-0 focus:ring-offset-0"
+                  className="rounded bg-slate-800 border-slate-700 text-emerald-500 focus:ring-0"
                 />
-                <span>Auto-listen (hands-free conversational mode)</span>
+                <Repeat className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="text-[11px] text-slate-300">Continuous conversation (Auto-listen)</span>
               </label>
             </div>
           </>
         ) : (
-          /* Start Call Button */
+          /* Start Voice Call Hero Button */
           <div className="flex justify-center">
             <button
               onClick={onStartCall}
-              className="px-8 py-3.5 rounded-full bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-semibold text-sm shadow-xl shadow-emerald-600/30 flex items-center gap-2.5 transition-all transform hover:-translate-y-0.5 active:scale-95"
+              className="px-8 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 hover:to-indigo-500 text-white font-bold text-sm shadow-2xl shadow-emerald-500/30 flex items-center gap-3 transition-all transform hover:-translate-y-0.5 active:scale-95 border border-emerald-400/20"
             >
               <Phone className="w-5 h-5" />
-              <span>Start Voice Call</span>
+              <span>Connect Voice Call (Free AI)</span>
             </button>
           </div>
         )}
 
-        {/* Fallback Text Simulation Bar */}
-        <form onSubmit={handleTextSubmit} className="flex gap-2 w-full mt-2">
+        {/* Text Simulation Input Bar */}
+        <form onSubmit={handleTextSubmit} className="flex gap-2 w-full mt-1">
           <input
             type="text"
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
             placeholder={
               callState === 'connected'
-                ? "Or type what caller says (e.g. 'Can I book a visit?')..."
-                : "Type message to simulate call turn..."
+                ? "Simulate caller speech (e.g., 'What are your hours?')..."
+                : "Type message to simulate turn..."
             }
-            className="flex-1 bg-slate-950/80 border border-slate-800 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 outline-none transition-colors"
+            className="flex-1 bg-slate-950/70 border border-white/10 focus:border-indigo-500/80 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 placeholder-slate-500 outline-none transition-all focus:ring-1 focus:ring-indigo-500/50"
           />
           <button
             type="submit"
             disabled={!textInput.trim()}
-            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white px-3.5 py-2 rounded-xl text-xs flex items-center gap-1 transition-colors"
+            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white px-4 py-2.5 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all shadow-lg shadow-indigo-600/20"
           >
             <Send className="w-3.5 h-3.5" />
             <span>Send</span>
