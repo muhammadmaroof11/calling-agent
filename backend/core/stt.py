@@ -7,15 +7,32 @@ from backend.core.config import settings
 class SpeechToTextService:
     """
     Handles Speech-to-Text conversion.
-    Uses OpenAI Whisper API (`whisper-1`) when an API key is configured.
-    Falls back gracefully if no key is provided, allowing testing without blockers.
+    Supports:
+    1. Groq Cloud Whisper (whisper-large-v3-turbo) - Blazing fast & 100% Free tier!
+    2. OpenAI Whisper (whisper-1)
+    3. Simulated offline fallback
     """
     def __init__(self):
-        self.api_key = settings.OPENAI_API_KEY
-        self.client = OpenAI(api_key=self.api_key) if self.api_key else None
+        self.groq_client = None
+        self.openai_client = None
+        
+        if settings.GROQ_API_KEY:
+            self.groq_client = OpenAI(
+                base_url="https://api.groq.com/openai/v1",
+                api_key=settings.GROQ_API_KEY
+            )
+            
+        if settings.OPENAI_API_KEY:
+            self.openai_client = OpenAI(
+                api_key=settings.OPENAI_API_KEY
+            )
 
-    def is_configured(self) -> bool:
-        return bool(self.api_key and self.client)
+    def get_active_provider(self) -> str:
+        if self.groq_client:
+            return "Groq Whisper (Free Tier)"
+        if self.openai_client:
+            return "OpenAI Whisper"
+        return "Offline Fallback"
 
     async def transcribe(self, audio_bytes: bytes, filename: str = "audio.webm") -> Tuple[str, float]:
         """
@@ -24,14 +41,13 @@ class SpeechToTextService:
         """
         start_time = time.time()
         
-        # If OpenAI key is present, use Whisper API
-        if self.is_configured():
+        # 1. Prefer Groq Whisper if configured (free and ultra-fast)
+        if self.groq_client:
             try:
-                # Prepare in-memory file for OpenAI SDK
                 audio_file = io.BytesIO(audio_bytes)
                 audio_file.name = filename
                 
-                response = self.client.audio.transcriptions.create(
+                response = self.groq_client.audio.transcriptions.create(
                     model=settings.WHISPER_MODEL,
                     file=audio_file,
                     language="en"
@@ -40,13 +56,30 @@ class SpeechToTextService:
                 transcript = response.text.strip()
                 return transcript, duration
             except Exception as e:
-                duration = time.time() - start_time
-                raise RuntimeError(f"OpenAI Whisper transcription failed: {str(e)}")
+                # If Groq fails, try next or log
+                print(f"[STT] Groq Whisper error: {e}")
         
-        # Fallback when no OpenAI API key is supplied
+        # 2. Try OpenAI Whisper if configured
+        if self.openai_client:
+            try:
+                audio_file = io.BytesIO(audio_bytes)
+                audio_file.name = filename
+                
+                response = self.openai_client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    language="en"
+                )
+                duration = time.time() - start_time
+                transcript = response.text.strip()
+                return transcript, duration
+            except Exception as e:
+                print(f"[STT] OpenAI Whisper error: {e}")
+                
+        # 3. Fallback when no keys are working
         duration = time.time() - start_time
         return (
-            "Hello Voxora, this is a simulated voice test since no OpenAI API key was provided.",
+            "Hello Voxora, this is a simulated voice test since no speech service processed the audio.",
             duration
         )
 

@@ -6,16 +6,53 @@ from backend.core.config import settings
 class AgentBrain:
     """
     Manages conversational memory and response generation for calling agent sessions.
-    Uses OpenAI (e.g. gpt-4o-mini) when API key is set, or a responsive local fallback agent.
+    Supports:
+    1. Google Gemini (e.g. gemini-2.5-flash) - Free Tier via Gemini API Key
+    2. Groq LLM (e.g. qwen/qwen3.8-27b / openai/gpt-oss-120b) - Free Tier via Groq API Key
+    3. OpenAI GPT (e.g. gpt-4o-mini)
+    4. Built-in smart mock voice persona
     """
     def __init__(self):
-        self.api_key = settings.OPENAI_API_KEY
-        self.client = OpenAI(api_key=self.api_key) if self.api_key else None
+        self.gemini_client = None
+        self.groq_client = None
+        self.openai_client = None
+        
+        # Initialize Gemini client via OpenAI-compatible endpoint
+        if settings.GEMINI_API_KEY:
+            self.gemini_client = OpenAI(
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                api_key=settings.GEMINI_API_KEY
+            )
+            
+        # Initialize Groq client
+        if settings.GROQ_API_KEY:
+            self.groq_client = OpenAI(
+                base_url="https://api.groq.com/openai/v1",
+                api_key=settings.GROQ_API_KEY
+            )
+            
+        # Initialize OpenAI client
+        if settings.OPENAI_API_KEY:
+            self.openai_client = OpenAI(
+                api_key=settings.OPENAI_API_KEY
+            )
+
         # In-memory store: { session_id: [ {"role": "system"|"user"|"assistant", "content": "..."} ] }
         self.sessions: Dict[str, List[Dict[str, str]]] = {}
 
-    def is_configured(self) -> bool:
-        return bool(self.api_key and self.client)
+    def get_active_provider(self) -> str:
+        provider = settings.LLM_PROVIDER.lower()
+        if provider == "gemini" and self.gemini_client:
+            return f"Gemini ({settings.GEMINI_MODEL})"
+        if provider == "groq" and self.groq_client:
+            return f"Groq ({settings.GROQ_MODEL})"
+        if self.gemini_client:
+            return f"Gemini ({settings.GEMINI_MODEL})"
+        if self.groq_client:
+            return f"Groq ({settings.GROQ_MODEL})"
+        if self.openai_client:
+            return f"OpenAI ({settings.OPENAI_MODEL})"
+        return "Built-in Rule Engine"
 
     def get_or_create_session(self, session_id: str) -> List[Dict[str, str]]:
         if session_id not in self.sessions:
@@ -36,13 +73,46 @@ class AgentBrain:
         """
         start_time = time.time()
         history = self.get_or_create_session(session_id)
-        
-        # Append user message
         history.append({"role": "user", "content": user_text})
         
-        if self.is_configured():
+        provider = settings.LLM_PROVIDER.lower()
+
+        # 1. Try Gemini if configured (or requested)
+        if (provider == "gemini" or not self.openai_client) and self.gemini_client:
             try:
-                response = self.client.chat.completions.create(
+                response = self.gemini_client.chat.completions.create(
+                    model=settings.GEMINI_MODEL,
+                    messages=history,
+                    temperature=0.7,
+                    max_tokens=200
+                )
+                reply = response.choices[0].message.content.strip()
+                history.append({"role": "assistant", "content": reply})
+                duration = time.time() - start_time
+                return reply, duration
+            except Exception as e:
+                print(f"[Brain] Gemini generation error: {e}")
+
+        # 2. Try Groq if configured
+        if self.groq_client:
+            try:
+                response = self.groq_client.chat.completions.create(
+                    model=settings.GROQ_MODEL,
+                    messages=history,
+                    temperature=0.7,
+                    max_tokens=200
+                )
+                reply = response.choices[0].message.content.strip()
+                history.append({"role": "assistant", "content": reply})
+                duration = time.time() - start_time
+                return reply, duration
+            except Exception as e:
+                print(f"[Brain] Groq generation error: {e}")
+
+        # 3. Try OpenAI if configured
+        if self.openai_client:
+            try:
+                response = self.openai_client.chat.completions.create(
                     model=settings.OPENAI_MODEL,
                     messages=history,
                     temperature=0.7,
@@ -53,24 +123,16 @@ class AgentBrain:
                 duration = time.time() - start_time
                 return reply, duration
             except Exception as e:
-                # If OpenAI fails, fall back to safe message
-                duration = time.time() - start_time
-                reply = f"I heard you say '{user_text}', but my AI brain encountered an error: {str(e)}"
-                history.append({"role": "assistant", "content": reply})
-                return reply, duration
-        
-        # Smart local mock voice agent when no OpenAI API key is set
+                print(f"[Brain] OpenAI generation error: {e}")
+
+        # 4. Smart local mock voice agent fallback
         reply = self._mock_voice_agent(user_text)
         history.append({"role": "assistant", "content": reply})
         duration = time.time() - start_time
         return reply, duration
 
     def _mock_voice_agent(self, user_text: str) -> str:
-        """
-        Provides natural voice responses for testing when OpenAI API key is not yet configured.
-        """
         text = user_text.lower().strip()
-        
         if any(w in text for w in ["hello", "hi", "hey", "good morning", "good evening"]):
             return "Hello! Thank you for calling Voxora. How can I assist you today?"
         elif any(w in text for w in ["who are you", "what is this", "what are you"]):

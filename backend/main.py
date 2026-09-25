@@ -16,7 +16,7 @@ from backend.core.tts import tts_service
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.VERSION,
-    description="Minimalist Voice Calling Agent with STT (Whisper), LLM Brain, and TTS"
+    description="Minimalist Voice Calling Agent with STT (Groq Whisper), LLM Brain (Gemini/Groq), and TTS (Edge/Fish Audio)"
 )
 
 # Enable CORS for React frontend
@@ -50,12 +50,15 @@ def get_status():
     Returns the current capabilities and configuration of the voice agent.
     """
     return {
+        "stt_provider": stt_service.get_active_provider(),
+        "llm_provider": agent_brain.get_active_provider(),
+        "tts_provider": tts_service.get_active_provider(),
+        "groq_configured": bool(settings.GROQ_API_KEY),
+        "gemini_configured": bool(settings.GEMINI_API_KEY),
+        "fish_audio_configured": bool(settings.FISH_AUDIO_API_KEY),
         "openai_configured": bool(settings.OPENAI_API_KEY),
-        "whisper_model": settings.WHISPER_MODEL if settings.OPENAI_API_KEY else "local-fallback / web-speech",
-        "llm_model": settings.OPENAI_MODEL if settings.OPENAI_API_KEY else "built-in-rule-engine",
-        "tts_provider": settings.TTS_PROVIDER,
         "edge_voice": settings.EDGE_TTS_VOICE,
-        "openai_voice": settings.OPENAI_TTS_VOICE,
+        "is_free_stack": True,
         "audio_cache_count": len(list(settings.AUDIO_CACHE_DIR.glob("*.mp3")))
     }
 
@@ -67,23 +70,21 @@ async def voice_turn(
 ):
     """
     Core Voice Calling Loop:
-    1. STT: User Audio -> Transcribed Text (OpenAI Whisper)
-    2. Brain: Transcribed Text -> Agent Reply (LLM / Conversation State)
-    3. TTS: Agent Reply -> Spoken Audio (Edge-TTS / OpenAI TTS)
+    1. STT: User Audio -> Transcribed Text (Groq Whisper / OpenAI Whisper)
+    2. Brain: Transcribed Text -> Agent Reply (Gemini / Groq / OpenAI LLM)
+    3. TTS: Agent Reply -> Spoken Audio (Edge-TTS / Fish Audio / OpenAI)
     """
     overall_start = time.time()
     
-    # 0. Session initialization
     if not session_id:
         session_id = str(uuid.uuid4())
         
     try:
-        # Read uploaded audio bytes
         audio_bytes = await audio.read()
         if not audio_bytes:
             raise HTTPException(status_code=400, detail="Empty audio recording received.")
 
-        # 1. Speech-to-Text (STT) via Whisper
+        # 1. Speech-to-Text (STT)
         user_text, stt_duration = await stt_service.transcribe(
             audio_bytes=audio_bytes,
             filename=audio.filename or "recording.webm"
@@ -160,17 +161,11 @@ async def text_turn(payload: TextTurnRequest):
 
 @app.post("/api/call/reset")
 def reset_call_session(payload: ResetSessionRequest):
-    """
-    Resets the conversation history of the specified session.
-    """
     agent_brain.reset_session(payload.session_id)
     return {"status": "ok", "message": f"Session {payload.session_id} reset."}
 
 @app.api_route("/api/audio/{filename}", methods=["GET", "HEAD"])
 def get_audio_file(filename: str):
-    """
-    Serves the synthesized audio file for the browser to play.
-    """
     file_path = settings.AUDIO_CACHE_DIR / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
