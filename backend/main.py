@@ -97,7 +97,7 @@ async def voice_turn(
         )
         
         # 3. Text-to-Speech (TTS)
-        audio_filename, tts_duration = await tts_service.synthesize(
+        audio_filename, tts_duration, tts_engine = await tts_service.synthesize(
             text=agent_reply,
             voice_override=voice
         )
@@ -109,6 +109,7 @@ async def voice_turn(
             "user_text": user_text,
             "agent_reply": agent_reply,
             "audio_url": f"/api/audio/{audio_filename}",
+            "tts_engine": tts_engine,
             "metrics": {
                 "stt_ms": round(stt_duration * 1000),
                 "llm_ms": round(llm_duration * 1000),
@@ -137,7 +138,7 @@ async def text_turn(payload: TextTurnRequest):
         )
         
         # 2. Text-to-Speech
-        audio_filename, tts_duration = await tts_service.synthesize(
+        audio_filename, tts_duration, tts_engine = await tts_service.synthesize(
             text=agent_reply,
             voice_override=payload.voice
         )
@@ -149,6 +150,7 @@ async def text_turn(payload: TextTurnRequest):
             "user_text": payload.text,
             "agent_reply": agent_reply,
             "audio_url": f"/api/audio/{audio_filename}",
+            "tts_engine": tts_engine,
             "metrics": {
                 "stt_ms": 0,
                 "llm_ms": round(llm_duration * 1000),
