@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Key, Volume2, ShieldCheck, HelpCircle } from 'lucide-react';
+import { X, Key, Volume2, ShieldCheck, HelpCircle, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export default function SettingsModal({
   isOpen,
@@ -36,7 +36,40 @@ export default function SettingsModal({
         </div>
 
         {/* Content */}
-        <div className="py-4 space-y-5 text-xs">
+        <div className="py-4 space-y-4 text-xs">
+          {/* Active Free AI Providers Badge */}
+          <div className="p-3 bg-gradient-to-r from-emerald-950/40 via-teal-950/30 to-slate-950 rounded-xl border border-emerald-800/60">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                <span>100% Free AI Tier Active</span>
+              </span>
+              <span className="px-2 py-0.5 rounded-full font-mono text-[10px] bg-emerald-900 text-emerald-300 border border-emerald-700">
+                $0.00 / month
+              </span>
+            </div>
+            <div className="space-y-1.5 text-slate-300 text-[11px]">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Speech-to-Text:</span>
+                <span className="font-mono text-emerald-300 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Groq Whisper
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Agent Brain:</span>
+                <span className="font-mono text-emerald-300 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Gemini 2.5 Flash
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Voice Synthesis:</span>
+                <span className="font-mono text-emerald-300 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Edge Neural TTS
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Voice Selector */}
           <div>
             <label className="block font-medium text-slate-300 mb-1.5 flex items-center gap-1.5">
@@ -55,37 +88,15 @@ export default function SettingsModal({
               ))}
             </select>
             <p className="text-[11px] text-slate-500 mt-1">
-              Powered by Edge Neural TTS (Free, realistic human cadence, no API key needed).
+              Powered by Microsoft Edge Neural TTS (100% free, natural human cadence, zero API key needed).
             </p>
           </div>
 
-          {/* OpenAI Integration Status */}
-          <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800/80">
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-medium text-slate-300 flex items-center gap-1.5">
-                <Key className="w-4 h-4 text-amber-400" />
-                <span>OpenAI Whisper &amp; GPT Status</span>
-              </span>
-              <span
-                className={`px-2 py-0.5 rounded-full font-mono text-[10px] ${
-                  systemStatus?.openai_configured
-                    ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                    : 'bg-amber-950 text-amber-400 border border-amber-800'
-                }`}
-              >
-                {systemStatus?.openai_configured ? 'Active (API Key Set)' : 'Offline Demo Mode'}
-              </span>
-            </div>
-
-            {systemStatus?.openai_configured ? (
-              <p className="text-slate-400 leading-relaxed text-[11px]">
-                OpenAI Whisper is transcribing your microphone audio and {systemStatus.llm_model} is handling conversation turns.
-              </p>
-            ) : (
-              <p className="text-slate-400 leading-relaxed text-[11px]">
-                To activate real OpenAI Whisper transcription and GPT-4o-mini, open <code className="text-indigo-300 bg-slate-900 px-1 py-0.5 rounded">backend/.env</code> and set your <code className="text-indigo-300 bg-slate-900 px-1 py-0.5 rounded">OPENAI_API_KEY</code>.
-              </p>
-            )}
+          {/* Fish Audio Note */}
+          <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-slate-400 text-[11px] leading-relaxed">
+            <span className="font-medium text-indigo-300 block mb-1">🐟 Using Fish Audio for Free:</span>
+            Fish Audio provides free starter credits on signup at <a href="https://fish.audio" target="_blank" rel="noreferrer" className="text-indigo-400 underline">fish.audio</a>.
+            To use it, add <code className="text-slate-300 bg-slate-900 px-1 py-0.5 rounded">FISH_AUDIO_API_KEY</code> and set <code className="text-slate-300 bg-slate-900 px-1 py-0.5 rounded">TTS_PROVIDER=fish-audio</code> in <code className="text-slate-300 bg-slate-900 px-1 py-0.5 rounded">backend/.env</code>. Edge-TTS is always available as a fallback!
           </div>
 
           {/* Quick Guide */}

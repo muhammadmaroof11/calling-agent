@@ -40,10 +40,10 @@ export default function PipelineInspector({ metrics, agentStatus, systemStatus }
             )}
           </div>
           <p className="text-xs font-medium text-slate-200">
-            {systemStatus?.openai_configured ? 'OpenAI Whisper-1' : 'Browser / Audio Capture'}
+            {systemStatus?.stt_provider || 'Groq Whisper-Large-v3-Turbo'}
           </p>
           <p className="text-[11px] text-slate-400 mt-1">
-            Converts raw microphone audio into transcribed text tokens.
+            Converts microphone audio into text via Groq Whisper in ~150ms.
           </p>
         </div>
 
@@ -66,10 +66,10 @@ export default function PipelineInspector({ metrics, agentStatus, systemStatus }
             )}
           </div>
           <p className="text-xs font-medium text-slate-200">
-            {systemStatus?.openai_configured ? systemStatus.llm_model : 'Voice Assistant Brain'}
+            {systemStatus?.llm_provider || 'Google Gemini 2.5 Flash'}
           </p>
           <p className="text-[11px] text-slate-400 mt-1">
-            Maintains conversation context &amp; generates phone persona reply.
+            Maintains call memory &amp; generates natural conversational response.
           </p>
         </div>
 
@@ -92,7 +92,7 @@ export default function PipelineInspector({ metrics, agentStatus, systemStatus }
             )}
           </div>
           <p className="text-xs font-medium text-slate-200 truncate">
-            {systemStatus?.edge_voice || 'Edge Neural TTS'}
+            {systemStatus?.tts_provider || 'Edge Neural TTS (Free)'}
           </p>
           <p className="text-[11px] text-slate-400 mt-1">
             Synthesizes conversational text into human-like audio file.

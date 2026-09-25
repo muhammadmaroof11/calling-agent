@@ -68,13 +68,13 @@ export default function App() {
           <div className="flex items-center gap-2.5">
             {/* Engine Pill */}
             <div className="hidden sm:flex items-center gap-1.5 bg-slate-800/80 border border-slate-700/80 px-3 py-1.5 rounded-full text-xs text-slate-300">
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  systemStatus?.openai_configured ? 'bg-emerald-400' : 'bg-amber-400'
-                }`}
-              />
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="font-medium">
-                {systemStatus?.openai_configured ? 'OpenAI Whisper & GPT' : 'Offline Smart Demo'}
+                {systemStatus?.groq_configured && systemStatus?.gemini_configured
+                  ? 'Groq Whisper + Gemini Flash (100% Free)'
+                  : systemStatus?.groq_configured
+                  ? 'Groq Whisper (Free)'
+                  : 'Free AI Voice Stack'}
               </span>
             </div>
 
