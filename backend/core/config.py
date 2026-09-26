@@ -35,10 +35,13 @@ class Settings(BaseModel):
     GROQ_MODEL: str = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     
-    # TTS: "edge-tts" (free neural), "fish-audio" (free trial credits), "openai"
-    TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "edge-tts")
+    # TTS: "fish-audio", "edge-tts", "openai"
+    TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "fish-audio" if os.getenv("FISH_AUDIO_API_KEY") else "edge-tts")
     EDGE_TTS_VOICE: str = os.getenv("EDGE_TTS_VOICE", "en-US-AriaNeural")
     OPENAI_TTS_VOICE: str = os.getenv("OPENAI_TTS_VOICE", "alloy")
+    
+    # Server Port (Changed to 8002 as requested)
+    PORT: int = int(os.getenv("PORT", 8002))
     
     # System Persona for Calling Agent
     SYSTEM_PROMPT: str = os.getenv(
